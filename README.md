@@ -16,3 +16,5 @@ You can select multiple packages from the list and the application will back the
 - Add option to set backup folder
 
 Feel free to submit pull-requests for fixes and added features.
+
+<img src="/images/cuteAndroidBackup.png">
