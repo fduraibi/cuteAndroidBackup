@@ -279,7 +279,7 @@ void MainWindow::on_btnRestore_clicked()
 
 void MainWindow::on_actionAbout_triggered()
 {
-    QString myTitle = "misiSProg";
+    QString myTitle = "cuteAndroidBackup";
     QString myBody = tr("<b>cuteAndroidBackup by fadvisor.net</b><br><br>"
                         "A graphical interface for 'adb'<br>"
                         "Source code: <a href='https://github.com/fduraibi/cuteAndroidBackup'>https://github.com/fduraibi/cuteAndroidBackup</a><br>"
