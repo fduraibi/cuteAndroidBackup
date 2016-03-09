@@ -17,7 +17,7 @@
    </sizepolicy>
   </property>
   <property name="windowTitle">
-   <string>miniSProg</string>
+   <string>cuteAndroidBackup</string>
   </property>
   <property name="windowIcon">
    <iconset resource="resources.qrc">

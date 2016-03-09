@@ -223,8 +223,8 @@ void MainWindow::on_checkBox_details_stateChanged(int status)
     // status 0 => Hide, 2 => Show
     if (status == 0) {
         ui->textEdit->setVisible(false);
-        // Using this to make it resize when hiding the console
-        QMetaObject::invokeMethod(this, "adjustSize", Qt::QueuedConnection);
+        // Using this to make it resize when hiding the console (not working as I want it so it is disabled for now)
+//         QMetaObject::invokeMethod(this, "adjustSize", Qt::QueuedConnection);
 
     } else {
         ui->textEdit->setVisible(true);
@@ -245,10 +245,13 @@ void MainWindow::on_btnBackup_clicked()
 
 void MainWindow::doBackup()
 {
+    // If list size > 0 then we have items to backup still
     if (selectionList.size() > 0)
     {
         state = BACKUP;
         QString package = selectionList.first()->text();
+
+        // Remove the package from the list
         selectionList.removeFirst();
         QString program = ui->lineEdit_adb->text();
         QStringList arguments;
