@@ -16,6 +16,8 @@ along with cuteAndroidBackup.  If not, see <http://www.gnu.org/licenses/>. */
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+const QString MainWindow::BACKUP_FILE_EXTENSION = "ab";
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
@@ -34,9 +36,14 @@ MainWindow::MainWindow(QWidget *parent) :
     state = IDLE;
 
     QString adb_path = "";
+    QString backup_path = "";
     QFileInfo adb_file;
     QSettings settings("fadvisor", "cuteAndroidBackup");
     adb_path = settings.value("adb_path").toString();
+    backup_path = settings.value("backup_path").toString();
+    ui->txtBackupPath->setText(backup_path);
+
+    getRestoreList();
 
     if (adb_path.isEmpty()){
 #ifdef Q_OS_LINUX
@@ -141,23 +148,19 @@ void MainWindow::procExited(int exitCode, QProcess::ExitStatus exitStatus)
     switch (state){
     case DEVICES:
     {
-        QString program = ui->lineEdit_adb->text();
-        QStringList arguments;
-        arguments.append("shell");
-        arguments.append("pm");
-        arguments.append("list");
-        arguments.append("packages");
-        arguments.append("-f");
-        proc->start(program, arguments);
-        state = APPS;
+        getAppsList();
         break;
     }
-    case 2 :
+    case APPS :
     {
         QStringList items;
         AppInfo appInfo;
-        items = buffer.split(QRegularExpression("\\r\\n"), QString::SkipEmptyParts);
+        // Remove carriage returns as they show up in some phones.
+        buffer.replace("\\r", "");
+        items = buffer.split(QRegularExpression("\\n"), QString::SkipEmptyParts);
         buffer.clear();
+
+        ui->listApps->clear();
 
         for (int i=0; i < items.size() ; i++)
         {
@@ -179,10 +182,23 @@ void MainWindow::procExited(int exitCode, QProcess::ExitStatus exitStatus)
     }
     case BACKUP:
     {
+        // TODO: Check the backup file size, if file is too small ( > 1K )then it means the application doesn't allow backups
+        //          so maybe we need to notify the user about that and delete the small useless file
+
+        // Remove the package from the list
+        selectionList.removeFirst();
+
         doBackup();
         break;
-    }
+    }   
+    case RESTORE:
+    {
+        // Remove the package from the list
+        selectionList.removeFirst();
 
+        doRestore();
+        break;
+    }
     }
 
 }
@@ -197,7 +213,6 @@ void MainWindow::progStandardOutput()
     } else if (state == BACKUP) {
 
     }
-
 }
 
 void MainWindow::progStandardError()
@@ -206,7 +221,7 @@ void MainWindow::progStandardError()
     ui->textEdit->append(tmp);
 }
 
-void MainWindow::on_toolBtn_adb_clicked()
+void MainWindow::on_btnADBpath_clicked()
 {
     QString adb_path = QFileDialog::getOpenFileName(this, tr("Select the adb file"),"./","adb (adb)");
 
@@ -217,6 +232,16 @@ void MainWindow::on_toolBtn_adb_clicked()
     }
 }
 
+void MainWindow::on_btnBackupPath_clicked()
+{
+    QString backup_path = QFileDialog::getExistingDirectory(this, tr("Select the backup and restore folder"), "/home", QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+
+    if (!backup_path.isNull()) {
+        ui->txtBackupPath->setText(backup_path);
+        QSettings settings("fadvisor", "cuteAndroidBackup");
+        settings.setValue("backup_path", backup_path);
+    }
+}
 
 void MainWindow::on_checkBox_details_stateChanged(int status)
 {
@@ -231,15 +256,73 @@ void MainWindow::on_checkBox_details_stateChanged(int status)
     }
 }
 
-void MainWindow::on_btnBackup_clicked()
+void MainWindow::on_btnAppsRefresh_clicked()
 {
-    selectionList = ui->listApps->selectedItems();
-    if (selectionList.size() < 1) {
+    getAppsList();
+}
+
+void MainWindow::getAppsList()
+{
+    QString program = ui->lineEdit_adb->text();
+    QStringList arguments;
+    arguments.append("shell");
+    arguments.append("pm");
+    arguments.append("list");
+    arguments.append("packages");
+    arguments.append("-f");
+    proc->start(program, arguments);
+    state = APPS;
+}
+
+void MainWindow::on_btnRestoreRefresh_clicked()
+{
+    getRestoreList();
+}
+
+void MainWindow::getRestoreList()
+{
+    QString backup_path = ui->txtBackupPath->text();
+
+    if (backup_path.isEmpty()) {
         ui->textEdit->setTextColor(Qt::red);
-        ui->textEdit->append(tr("ERROR: Select the packages first."));
+        ui->textEdit->append(tr("ERROR: Select the backup path first."));
         setDefaultConsoleColor();
     } else {
-        doBackup();
+        ui->listRestoreApps->clear();
+
+        QDir dirBackup(backup_path);
+        QStringList filter("*." + BACKUP_FILE_EXTENSION);
+        QStringList filesList = dirBackup.entryList(QStringList(filter), QDir::Files);
+
+        for (int i=0; i < filesList.size() ; i++)
+        {
+            QString file = filesList.value(i);
+
+            // Remove the file extension BACKUP_FILE_EXTENSION, and one for the dot
+            file.chop(BACKUP_FILE_EXTENSION.length() + 1);
+            ui->listRestoreApps->addItem(file);
+        }
+    }
+
+}
+
+void MainWindow::on_btnBackup_clicked()
+{
+    QString backup_path = ui->txtBackupPath->text();
+
+    if (backup_path.isEmpty()) {
+        ui->textEdit->setTextColor(Qt::red);
+        ui->textEdit->append(tr("ERROR: Select the backup path first."));
+        setDefaultConsoleColor();
+    } else {
+        selectionList = ui->listApps->selectedItems();
+        if (selectionList.size() < 1) {
+            ui->textEdit->setTextColor(Qt::red);
+            ui->textEdit->append(tr("ERROR: Select the packages first."));
+            setDefaultConsoleColor();
+        } else {
+            doBackup();
+        }
     }
 }
 
@@ -250,14 +333,21 @@ void MainWindow::doBackup()
     {
         state = BACKUP;
         QString package = selectionList.first()->text();
-
-        // Remove the package from the list
-        selectionList.removeFirst();
+        QString backup_path = ui->txtBackupPath->text();
         QString program = ui->lineEdit_adb->text();
         QStringList arguments;
+        QString backupType = "data";
         arguments.append("backup");
+        if (ui->rbtnBackupDataApp->isChecked()) {
+            arguments.append("-apk");
+            backupType = "data_apk";
+        } else if (ui->rbtnBackupDataAppExp->isChecked()) {
+            arguments.append("-apk");
+            arguments.append("-obb");
+            backupType = "data_apk_exp";
+        }
         arguments.append("-f");
-        arguments.append(package + ".bak");
+        arguments.append(backup_path + "/" + package + "-" + backupType + "." + BACKUP_FILE_EXTENSION);
         arguments.append(package);
 
         proc->start(program, arguments);
@@ -271,9 +361,64 @@ void MainWindow::doBackup()
     }
 }
 
+void MainWindow::checkBackup()
+{
+    QString package = selectionList.first()->text();
+    QString backup_path = ui->txtBackupPath->text();
+    QString backupType = "data";
+    if (ui->rbtnBackupDataApp->isChecked()) {
+        backupType = "data_apk";
+    } else if (ui->rbtnBackupDataAppExp->isChecked()) {
+        backupType = "data_apk_exp";
+    }
+
+    QFileInfo backupFile((backup_path + "/" + package + "-" + backupType + "." + BACKUP_FILE_EXTENSION));
+    if (backupFile.size() < MINIMUM_FILE_SIZE){
+
+    }
+}
+
 void MainWindow::on_btnRestore_clicked()
 {
+    QString backup_path = ui->txtBackupPath->text();
 
+    if (backup_path.isEmpty()) {
+        ui->textEdit->setTextColor(Qt::red);
+        ui->textEdit->append(tr("ERROR: Select the backup path first."));
+        setDefaultConsoleColor();
+    } else {
+        selectionList = ui->listRestoreApps->selectedItems();
+        if (selectionList.size() < 1) {
+            ui->textEdit->setTextColor(Qt::red);
+            ui->textEdit->append(tr("ERROR: Select the packages first."));
+            setDefaultConsoleColor();
+        } else {
+            doRestore();
+        }
+    }
+}
+
+void MainWindow::doRestore()
+{
+    // If list size > 0 then we have items to backup still
+    if (selectionList.size() > 0)
+    {
+        state = RESTORE;
+        QString file = selectionList.first()->text();
+        QString backup_path = ui->txtBackupPath->text();
+
+        // Remove the file from the list
+        selectionList.removeFirst();
+        QString program = ui->lineEdit_adb->text();
+        QStringList arguments;
+        arguments.append("restore");
+        arguments.append(backup_path + "/" + file + "." + BACKUP_FILE_EXTENSION);
+        proc->start(program, arguments);
+
+        ui->textEdit->append(tr("* Restoring (") + file + tr(")"));
+    } else {
+        state = IDLE;
+    }
 }
 
 

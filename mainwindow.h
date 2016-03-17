@@ -30,6 +30,9 @@ along with cuteAndroidBackup.  If not, see <http://www.gnu.org/licenses/>. */
 #define DEVICES 1
 #define APPS    2
 #define BACKUP  3
+#define RESTORE 4
+
+#define MINIMUM_FILE_SIZE   1024    // Minimum size for a working backup file (Apps that do not allow backup generates files < 1K)
 
 namespace Ui {
     class MainWindow;
@@ -53,7 +56,10 @@ private slots:
     void progStandardOutput();
     void progStandardError();
 
-    void on_toolBtn_adb_clicked();
+    void on_btnADBpath_clicked();
+    void on_btnBackupPath_clicked();
+    void on_btnAppsRefresh_clicked();
+    void on_btnRestoreRefresh_clicked();
 
     void on_checkBox_details_stateChanged(int status);
 
@@ -66,8 +72,14 @@ private:
     Ui::MainWindow *ui;
     QProcess * proc;
 
+    static const QString BACKUP_FILE_EXTENSION;
+
     void setDefaultConsoleColor();
     void doBackup();
+    void doRestore();
+    void getAppsList();
+    void getRestoreList();
+    void checkBackup();
 
     int state;
     QString buffer;
