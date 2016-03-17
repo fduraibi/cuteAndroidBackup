@@ -298,7 +298,7 @@ void MainWindow::getRestoreList()
         {
             QString file = filesList.value(i);
 
-            // Remove the file extension BACKUP_FILE_EXTENSION, and one for the dot
+            // Remove the file extension BACKUP_FILE_EXTENSION, and add one for the dot
             file.chop(BACKUP_FILE_EXTENSION.length() + 1);
             ui->listRestoreApps->addItem(file);
         }
