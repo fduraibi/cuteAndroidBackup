@@ -41,9 +41,11 @@ MainWindow::MainWindow(QWidget *parent) :
     QSettings settings("fadvisor", "cuteAndroidBackup");
     adb_path = settings.value("adb_path").toString();
     backup_path = settings.value("backup_path").toString();
-    ui->txtBackupPath->setText(backup_path);
 
-    getRestoreList();
+    if ( ! backup_path.isEmpty() ) {
+        ui->txtBackupPath->setText(backup_path);
+        getRestoreList();
+    }
 
     if (adb_path.isEmpty()){
 #ifdef Q_OS_LINUX
@@ -132,23 +134,25 @@ void MainWindow::procExited(int exitCode, QProcess::ExitStatus exitStatus)
     ui->textEdit->append("Done.");
     ui->textEdit->append(QString::number(exitCode));
 
-//    if ( myProcess->exitStatus() == 0)
-//    {
-//    qDebug () << "Program ran successfully";
-//    }
-//    if ( myProcess->exitStatus() == 2)
-//    {
-//    qDebug () << "Customized message";
-//    }
-//    if ( myProcess->exitStatus() == 3)
-//    {
-//    qDebug () << "Another text warning message";
-//    }
+    if ( exitStatus == 0) {
+        qDebug("Program ran successfully");
+    } else if ( exitStatus == 2) {
+        qDebug("Customized message");
+    } else if ( exitStatus == 3) {
+        qDebug("Another text warning message");
+    }
 
     switch (state){
     case DEVICES:
     {
-        getAppsList();
+        QStringList items;
+        buffer.remove(QRegExp("[\\r]"));
+        items = buffer.split(QRegularExpression("\\n"), QString::SkipEmptyParts);
+        buffer.clear();
+        if ( items.size() > 1 ) {
+            getAppsList();
+        }
+
         break;
     }
     case APPS :
@@ -156,7 +160,7 @@ void MainWindow::procExited(int exitCode, QProcess::ExitStatus exitStatus)
         QStringList items;
         AppInfo appInfo;
         // Remove carriage returns as they show up in some phones.
-        buffer.replace("\\r", "");
+        buffer.remove(QRegExp("[\\r]"));
         items = buffer.split(QRegularExpression("\\n"), QString::SkipEmptyParts);
         buffer.clear();
 
@@ -182,9 +186,7 @@ void MainWindow::procExited(int exitCode, QProcess::ExitStatus exitStatus)
     }
     case BACKUP:
     {
-        // TODO: Check the backup file size, if file is too small ( > 1K )then it means the application doesn't allow backups
-        //          so maybe we need to notify the user about that and delete the small useless file
-
+        checkBackup();
         // Remove the package from the list
         selectionList.removeFirst();
 
@@ -208,7 +210,7 @@ void MainWindow::progStandardOutput()
     QString tmp = proc->readAllStandardOutput();
     ui->textEdit->append(tmp);
 
-    if (state == APPS) {
+    if (state == APPS || state == DEVICES) {
         buffer.append(tmp);
     } else if (state == BACKUP) {
 
@@ -263,13 +265,29 @@ void MainWindow::on_btnAppsRefresh_clicked()
 
 void MainWindow::getAppsList()
 {
+/*
+    -f: see their associated file
+    -d: filter to only show disabled packages
+    -e: filter to only show enabled packages
+    -s: filter to only show system packages
+    -3: filter to only show third party packages
+    -i: see the installer for the packages
+    -u: also include uninstalled packages
+*/
+
     QString program = ui->lineEdit_adb->text();
     QStringList arguments;
     arguments.append("shell");
-    arguments.append("pm");
+//    if ( Android N ) {    // "pm" got changed to "cmd package" in Android N
+//        arguments.append("cmd");
+//        arguments.append("package");
+//    } else {
+        arguments.append("pm");
+//    }
     arguments.append("list");
     arguments.append("packages");
     arguments.append("-f");
+    arguments.append("-3");
     proc->start(program, arguments);
     state = APPS;
 }
@@ -361,6 +379,8 @@ void MainWindow::doBackup()
     }
 }
 
+// Check the backup file size, if file is too small ( > 1K ) then it means the application doesn't allow
+// backups so we need to notify the user about that and delete the small useless file.
 void MainWindow::checkBackup()
 {
     QString package = selectionList.first()->text();
@@ -374,7 +394,10 @@ void MainWindow::checkBackup()
 
     QFileInfo backupFile((backup_path + "/" + package + "-" + backupType + "." + BACKUP_FILE_EXTENSION));
     if (backupFile.size() < MINIMUM_FILE_SIZE){
-
+        ui->textEdit->setTextColor(Qt::red);
+        ui->textEdit->append(tr("ERROR: The application (") + package + tr(") does not allow backup"));
+        setDefaultConsoleColor();
+        QFile::remove(backupFile.canonicalFilePath());
     }
 }
 
@@ -429,7 +452,7 @@ void MainWindow::on_actionAbout_triggered()
                         "A graphical interface for 'adb'<br>"
                         "Source code: <a href='https://github.com/fduraibi/cuteAndroidBackup'>https://github.com/fduraibi/cuteAndroidBackup</a><br>"
                         "Developed by: Fahad Alduraibi<br>"
-                        "v1.0");
+                        "v1.1");
     QMessageBox::about(this, myTitle, myBody);
 }
 
