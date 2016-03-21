@@ -236,7 +236,8 @@ void MainWindow::on_btnADBpath_clicked()
 
 void MainWindow::on_btnBackupPath_clicked()
 {
-    QString backup_path = QFileDialog::getExistingDirectory(this, tr("Select the backup and restore folder"), "/home", QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    QString backup_path = ui->txtBackupPath->text();
+    backup_path = QFileDialog::getExistingDirectory(this, tr("Select the backup and restore folder"), backup_path, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
 
     if (!backup_path.isNull()) {
         ui->txtBackupPath->setText(backup_path);
@@ -405,7 +406,7 @@ void MainWindow::on_btnRestore_clicked()
 {
     QString backup_path = ui->txtBackupPath->text();
 
-    if (backup_path.isEmpty()) {
+    if (backup_path.isNull() || backup_path.isEmpty()) {
         ui->textEdit->setTextColor(Qt::red);
         ui->textEdit->append(tr("ERROR: Select the backup path first."));
         setDefaultConsoleColor();
@@ -430,8 +431,6 @@ void MainWindow::doRestore()
         QString file = selectionList.first()->text();
         QString backup_path = ui->txtBackupPath->text();
 
-        // Remove the file from the list
-        selectionList.removeFirst();
         QString program = ui->lineEdit_adb->text();
         QStringList arguments;
         arguments.append("restore");
