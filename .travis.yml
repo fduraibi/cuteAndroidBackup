@@ -1,0 +1,14 @@
+sudo: required
+dist: trusty
+
+before_install:
+    - sudo apt-add-repository -y ppa:beineri/opt-qt551-trusty
+    - sudo apt-get update -qq
+    - sudo apt-get install -qq qt5-qmake qt55base qt55declarative qt5-default
+
+language: cpp
+
+script:
+    - source /opt/qt55/bin/qt55-env.sh
+    - qmake
+    - make
